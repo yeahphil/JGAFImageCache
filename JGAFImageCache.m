@@ -108,13 +108,14 @@
     return image;
 }
 
-- (AFHTTPClient *)httpClientForBaseURL:(NSString *)baseURL {
-    AFHTTPClient *httpClient;
+- (AFHTTPSessionManager *)httpClientForBaseURL:(NSString *)baseURL {
+    AFHTTPSessionManager *httpClient;
     @synchronized(self) {
         NSString *key = [baseURL jgaf_sha1];
         httpClient = [_httpClientCache objectForKey:key];
         if(httpClient == nil) {
-            httpClient = [[AFHTTPClient alloc] initWithBaseURL:[NSURL URLWithString:baseURL]];
+            httpClient = [[AFHTTPSessionManager alloc] initWithBaseURL:[NSURL URLWithString:baseURL]];
+            httpClient.responseSerializer = [AFImageResponseSerializer serializer];
             [_httpClientCache setObject:httpClient forKey:key];
             
 #if JGAFImageCache_LOGGING_ENABLED
@@ -129,17 +130,17 @@
     NSURL *imageURL = [NSURL URLWithString:url];
     NSString *baseURL = [NSString stringWithFormat:@"%@://%@", imageURL.scheme, imageURL.host];
     NSString *imagePath = [[self class] escapedPathForURL:imageURL];
-    AFHTTPClient *httpClient = [self httpClientForBaseURL:baseURL];
+    AFHTTPSessionManager *httpClient = [self httpClientForBaseURL:baseURL];
     [httpClient
-     getPath:imagePath
+     GET:imagePath
      parameters:nil
-     success:^(AFHTTPRequestOperation *operation, id responseObject) {
+     success:^(NSURLSessionDataTask *task, id responseObject) {
          __weak JGAFImageCache *weakSelf = self;
          dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-             UIImage *image = nil;
+             UIImage *image;
              if(responseObject) {
                  @try {
-                     image = [[UIImage alloc] initWithData:responseObject];
+                     image = responseObject;
                  }
                  @catch(NSException *exception) {
 #if JGAFImageCache_LOGGING_ENABLED
@@ -160,33 +161,33 @@
                  });
              }
          });
-     }
-     failure:^(AFHTTPRequestOperation *operation, NSError *error) {
-         NSInteger statusCode = operation.response.statusCode;
-         if((retryCount >= self.maxNumberOfRetries) || (statusCode >= 400 && statusCode <= 499)) {
-             //out of retries or got a 400 level error so don't retry
-             if(completion) {
-                 completion(nil);
-             }
-         }
-         else {
-             // try again
-             NSInteger nextRetryCount = retryCount + 1;
-             double delayInSeconds = self.retryDelay;
-             dispatch_time_t popTime = dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delayInSeconds * NSEC_PER_SEC));
-             dispatch_after(popTime, dispatch_get_main_queue(), ^(void){
-                 [self loadRemoteImageForURL:url key:key retryCount:nextRetryCount completion:completion];
-             });
-             
+    } failure:^(NSURLSessionDataTask *task, NSError *error) {
+        NSHTTPURLResponse *httpResponse = (NSHTTPURLResponse *)task.response;
+        NSInteger statusCode = httpResponse.statusCode;
+        if((retryCount >= self.maxNumberOfRetries) || (statusCode >= 400 && statusCode <= 499)) {
+            //out of retries or got a 400 level error so don't retry
+            if(completion) {
+                completion(nil);
+            }
+        }
+        else {
+            // try again
+            NSInteger nextRetryCount = retryCount + 1;
+            double delayInSeconds = self.retryDelay;
+            dispatch_time_t popTime = dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delayInSeconds * NSEC_PER_SEC));
+            dispatch_after(popTime, dispatch_get_main_queue(), ^(void){
+                [self loadRemoteImageForURL:url key:key retryCount:nextRetryCount completion:completion];
+            });
+            
 #if JGAFImageCache_LOGGING_ENABLED
-             NSLog(@"%s [Line %d] retrying(%d)", __PRETTY_FUNCTION__, __LINE__, nextRetryCount);
+            NSLog(@"%s [Line %d] retrying(%d)", __PRETTY_FUNCTION__, __LINE__, nextRetryCount);
 #endif
-         }
-         
+        }
+        
 #if JGAFImageCache_LOGGING_ENABLED
-         NSLog(@"%s [Line %d] statusCode(%d) %@", __PRETTY_FUNCTION__, __LINE__, statusCode, error);
+        NSLog(@"%s [Line %d] statusCode(%d) %@", __PRETTY_FUNCTION__, __LINE__, statusCode, error);
 #endif
-     }];
+    }];
 }
 
 - (void)clearAllData {
