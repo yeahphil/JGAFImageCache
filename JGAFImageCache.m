@@ -65,13 +65,16 @@
 }
 
 - (void)imageForURL:(NSString *)url completion:(void (^)(UIImage *image))completion {
+    NSString *sha1 = [url jgaf_sha1];
+    UIImage *memoryImage = [self.imageCache objectForKey:sha1];
+    if (memoryImage) {
+        completion(memoryImage);
+        return;
+    }
+    
     __weak JGAFImageCache *weakSelf = self;
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-        NSString *sha1 = [url jgaf_sha1];
-        UIImage *image = [weakSelf.imageCache objectForKey:sha1];
-        if(image == nil) {
-            image = [weakSelf imageFromDiskForKey:sha1];
-        }
+        UIImage *image = [weakSelf imageFromDiskForKey:sha1];
         
         if(image == nil) {
             [weakSelf loadRemoteImageForURL:url key:sha1 retryCount:0 completion:completion];
