@@ -7,7 +7,7 @@ Pod::Spec.new do |s|
     s.author       = 'Jamin Guy'
     s.source       = { :git => 'https://github.com/jaminguy/JGAFImageCache.git', :tag => '1.1.2' }
     s.source_files = '*.[hm]'
-    s.platform     = :ios, '5.0'
+    s.platform     = :ios, '6.0'
     s.requires_arc = true
     s.dependency 'AFNetworking', '~> 2.2.1'
 end
