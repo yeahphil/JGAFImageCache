@@ -9,5 +9,5 @@ Pod::Spec.new do |s|
     s.source_files = '*.[hm]'
     s.platform     = :ios, '5.0'
     s.requires_arc = true
-    s.dependency 'AFNetworking', '~> 2.0.3'
+    s.dependency 'AFNetworking', '~> 2.2.1'
 end
